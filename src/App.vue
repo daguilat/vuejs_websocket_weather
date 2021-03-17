@@ -1,8 +1,5 @@
 <template>
   <div id="app">
-    <h2>Vue.js WebSocket Tutorial</h2> 
-    <button v-on:click="sendMessage('hello')">Send Message</button>
-
     <table id="weather">
       <tr>
         <th>City</th>
@@ -24,12 +21,9 @@ export default {
   data: function() {
     return {
       connection: null,
-      citiesData: [],
-      currentWeather: [{
-        name: 'Santiago',
-        temp: 30.6,
-        time: 'hola'
-      }]
+      connected: false,
+      currentWeather: [],
+      cityNames : ['Santiago', 'Zúrich', 'Auckland', 'London', 'Georgia']
     }
   },
   created: function() {  
@@ -39,43 +33,43 @@ export default {
     console.log(this.connection)
 
     var self = this;
+    this.connection.onopen = function() {
+      self.connected = true;
+      console.log("Successfully connected to the echo websocket server...")
+    }
+
     this.connection.onmessage = function(event) { 
       var data = JSON.parse(event.data);
-      if(data.opt == "1"){
-        var cityData = {name: data.name, lon: data.lon, lat: data.lat};
-        self.citiesData.push(cityData);
-      } else {
-        console.log(event)
-
-      }
+      self.currentWeather = []
+      data.forEach(dataTemp => {
+        var city = JSON.parse(dataTemp)
+        var weatherData = {name: city.name, temp: city.main.temp, time: self.parse_timezone(city.timezone)};
+        self.currentWeather.push(weatherData)
+      });
     }
+
   },
 
   methods: {
-    get_city_coords: function(data) {
-      this.connection.onopen = () => this.connection.send(data);
+    get_city_weather: function(data) {
+      this.connection.send(data);
     },
 
-    get_city_weather: function(data) {
-      this.connection.onopen = () => this.connection.send(data);
+    parse_timezone: function(timezone){
+      var d = new Date()
+      var localTime = d.getTime()
+      var localOffset = d.getTimezoneOffset() * 60000
+      var utc = localTime + localOffset
+      var cityTime = utc + (1000 * timezone)
+      return new Date(cityTime)
     }
   },
   mounted: function () {
-    // Loading every city coords
-    var cityNames = ['Santiago', 'Zúrich', 'Auckland', 'London', 'Georgia'];
-
-    cityNames.forEach( city =>  {
-      var data = '{"route": "get_city_coords", "name": "' + city + '"}';
-      this.get_city_coords(data);
-    });
-
-
-    window.setInterval(() => {
-      this.citiesData.forEach( city => {
-        var data = '{"route": "get_city_weather", "lon": "' + city.lon + '", "lat": "' + city.lat + '"}';
-        this.get_city_weather(data);
-      });
-    }, 1000)
+    this.interval = setInterval(() => {
+      if(this.connected){
+        this.get_city_weather(this.cityNames);
+      }
+    },10000);
   }
 }
 </script>
